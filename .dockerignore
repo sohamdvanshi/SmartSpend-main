@@ -1,7 +1,31 @@
+# Python
 .venv
 __pycache__
 *.pyc
-mlruns
-Expense_model/data
-frontend/node_modules
+*.pyo
+*.pyd
+
+# Git
 .git
+.gitignore
+
+# MLflow & DVC (runtime artifacts, not needed in image)
+mlruns/
+mlflow.db
+.dvc/
+.dvcignore
+
+# Training data (models are copied explicitly)
+Expense_model/data/
+Expense_model/notebooks/
+
+# Frontend (separate service)
+frontend/
+
+# Secrets & env
+.env
+*.env
+
+# Docs
+README.md
+LICENSE
