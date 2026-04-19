@@ -18,6 +18,7 @@ import pdfplumber
 import PyPDF2
 import fitz
 import platform
+from ocr_utils import extract_grand_total, remove_non_monetary_numbers, clean_vendor_name
 
 
 app = Flask(__name__)
@@ -443,33 +444,38 @@ class BillExtractor:
     def extract_amounts(self, text):
         """Extract monetary amounts from text with improved pattern matching"""
         # More comprehensive patterns for Indian currency and general amounts
+        quick_total = extract_grand_total(text)
+        if quick_total:
+         return [quick_total], "INR"
+        
+        text = remove_non_monetary_numbers(text)
         amount_patterns = [
-            # Direct currency patterns
-            r'INR\s*([0-9,]+\.?[0-9]*)',  # INR 47,925.00
-            r'₹\s*([0-9,]+\.?[0-9]*)',    # ₹47,925.00
-            r'Rs\.?\s*([0-9,]+\.?[0-9]*)', # Rs.47,925.00
+        # Direct currency patterns
+        r'INR\s*([0-9,]+\.?[0-9]*)',  # INR 47,925.00
+        r'₹\s*([0-9,]+\.?[0-9]*)',    # ₹47,925.00
+        r'Rs\.?\s*([0-9,]+\.?[0-9]*)', # Rs.47,925.00
             
-            # Context-based patterns (prioritize grand total)
-            r'(?:grand\s+total|final\s+total|payable\s+amount)[:\s]+.*?(?:INR|₹|Rs\.?)\s*([0-9,]+\.?[0-9]*)', 
-            r'(?:grand\s+total|final\s+total|payable\s+amount)[:\s]+([0-9,]+\.?[0-9]*)', 
-            r'(?:total|amount|invoice\s+amount|bill\s+amount|net\s+total)[:\s]+.*?(?:INR|₹|Rs\.?)\s*([0-9,]+\.?[0-9]*)', 
-            r'(?:total|amount|invoice\s+amount|bill\s+amount|net\s+total)[:\s]+([0-9,]+\.?[0-9]*)', 
+        # Context-based patterns (prioritize grand total)
+        r'(?:grand\s+total|final\s+total|payable\s+amount)[:\s]+.*?(?:INR|₹|Rs\.?)\s*([0-9,]+\.?[0-9]*)', 
+        r'(?:grand\s+total|final\s+total|payable\s+amount)[:\s]+([0-9,]+\.?[0-9]*)', 
+        r'(?:total|amount|invoice\s+amount|bill\s+amount|net\s+total)[:\s]+.*?(?:INR|₹|Rs\.?)\s*([0-9,]+\.?[0-9]*)', 
+        r'(?:total|amount|invoice\s+amount|bill\s+amount|net\s+total)[:\s]+([0-9,]+\.?[0-9]*)', 
             
             # Line-based patterns with aggressive Grand Total matching
-            r'^.*(?:grand\s+total|final\s+total|payable).*?([0-9,]+\.?[0-9]*).*$',  # Grand total lines (priority)
-            r'^.*grand.*?([0-9]+).*$',  # Any line with "grand" and a number
-            r'^.*(?:total|amount).*?([0-9,]+\.[0-9]{2}).*$',  # Lines containing 'total' or 'amount'
-            r'^.*([0-9,]+\.[0-9]{2}).*(?:INR|₹|Rs|total|amount).*$',  # Amount followed by currency/keywords
+        r'^.*(?:grand\s+total|final\s+total|payable).*?([0-9,]+\.?[0-9]*).*$',  # Grand totallines (priority)
+        r'^.*grand.*?([0-9]+).*$',  # Any line with "grand" and a number
+        r'^.*(?:total|amount).*?([0-9,]+\.[0-9]{2}).*$',  # Lines containing 'total' or 'amount'
+        r'^.*([0-9,]+\.[0-9]{2}).*(?:INR|₹|Rs|total|amount).*$',  # Amount followed by currency/keywords
             
             # General amount patterns (last resort)
-            r'([0-9]{1,2},[0-9]{3}\.[0-9]{2})',  # Format: 12,345.67
-            r'([0-9]{1,3},[0-9]{3})',  # Format: 12,345 (without decimals)
-            r'([0-9]+\.[0-9]{2})(?=\s*(?:INR|₹|Rs|\s*$))', # Amount followed by currency or end of line
-            r'([0-9]{2,4})(?=\s*$)',  # 2-4 digit numbers at end of line (like "70")
+        r'([0-9]{1,2},[0-9]{3}\.[0-9]{2})',  # Format: 12,345.67
+        r'([0-9]{1,3},[0-9]{3})',  # Format: 12,345 (without decimals)
+        r'([0-9]+\.[0-9]{2})(?=\s*(?:INR|₹|Rs|\s*$))', # Amount followed by currency or end of line
+        r'([0-9]{2,4})(?=\s*$)',  # 2-4 digit numbers at end of line (like "70")
             
             # Fallback patterns
-            r'\$\s*([0-9,]+\.?[0-9]*)',   # $123.45
-            r'USD\s*([0-9,]+\.?[0-9]*)',  # USD 123.45
+        r'\$\s*([0-9,]+\.?[0-9]*)',   # $123.45
+        r'USD\s*([0-9,]+\.?[0-9]*)',  # USD 123.45
         ]
         
         amounts = []
@@ -809,7 +815,7 @@ class BillExtractor:
                     # Exact match or candidate is just the brand name
                     if candidate_lower == brand or candidate_lower.replace(' ', '') == brand.replace(' ', ''):
                         print(f"🏢 Found vendor (exact brand): {candidate}")
-                        return candidate.strip()
+                        return clean_vendor_name(candidate.strip())
             
             # Check for brand names contained in longer company names (but prefer shorter ones)
             brand_matches = []
@@ -829,13 +835,13 @@ class BillExtractor:
             for candidate in vendor_candidates:
                 if any(keyword in candidate.upper() for keyword in ['LIMITED', 'BRANDS']):
                     print(f"🏢 Found vendor (priority): {candidate}")
-                    return candidate.strip()
+                    return clean_vendor_name(candidate.strip())
             
             # Prefer all-caps company names (like "GUJARAT FREIGHT TOOLS")
             for candidate in vendor_candidates:
                 if candidate.isupper() and len(candidate) > 5:
                     print(f"🏢 Found vendor (caps): {candidate}")
-                    return candidate.strip()
+                    return clean_vendor_name(candidate.strip())
             
             # Prefer lines with company indicators
             for candidate in vendor_candidates:
@@ -843,12 +849,12 @@ class BillExtractor:
                     'pvt', 'ltd', 'labs', 'tools', 'freight', 'manufacturing'
                 ]):
                     print(f"🏢 Found vendor (indicator): {candidate}")
-                    return candidate.strip()
+                    return clean_vendor_name(candidate.strip())
                     
             # Return first candidate if none have special indicators
             result = vendor_candidates[0].strip()
             print(f"🏢 Found vendor (default): {result}")
-            return result
+            return clean_vendor_name(result)
         
         print("🏢 No vendor detected")
         return "Unknown Vendor"

@@ -28,7 +28,7 @@ def remove_non_monetary_numbers(text: str) -> str:
 
     # Indian PIN codes — 6-digit numbers that start with a non-zero digit
     # Also handles "Bangalore-560037" style
-    text = re.sub(r'(?<![₹\d])\b[1-9]\d{5}\b(?!\.\d)', '', text)
+    text = re.sub(r'(?<![₹\d])\b[1-9]\d{5,6}\b(?!\.\d)', '', text)
 
     # 10-digit phone numbers (with or without spaces/dashes)
     text = re.sub(r'\b\d{10}\b', '', text)
@@ -60,6 +60,8 @@ def extract_grand_total(text: str):
     labelled_patterns = [
         # Grand Total  940.00  /  Grand Total : 940  /  Grand Total  940
         r'grand\s*total[\s:₹Rs.]*([0-9,]+(?:\.[0-9]{1,2})?)',
+        r'grand\s*\w{3,6}[}\]|]?\s*[:\s₹Rs.]*([0-9,]+(?:\.[0-9]{1,2})?)',
+        r'sub\s*\w{2,5}[:\s₹Rs.]*([0-9,]+(?:\.[0-9]{1,2})?)',
         r'total\s*amount[\s:₹Rs.]*([0-9,]+(?:\.[0-9]{1,2})?)',
         r'net\s*(?:payable|total)[\s:₹Rs.]*([0-9,]+(?:\.[0-9]{1,2})?)',
         r'amount\s*payable[\s:₹Rs.]*([0-9,]+(?:\.[0-9]{1,2})?)',
