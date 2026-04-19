@@ -7,6 +7,8 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 
+from sklearn.linear_model import SGDClassifier
+from sklearn.naive_bayes import MultinomialNB, ComplementNB
 from scipy.sparse import hstack
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -57,6 +59,26 @@ CANDIDATES = [
         "model": LinearSVC(class_weight="balanced", random_state=42, max_iter=2000),
         "tfidf_params": {"max_features": 8000, "ngram_range": (1, 3), "sublinear_tf": True},
     },
+    {
+    "run_name": "logreg_tfidf_trigram_c5",
+    "model": LogisticRegression(C=5, max_iter=1000, class_weight="balanced", random_state=42),
+    "tfidf_params": {"max_features": 10000, "ngram_range": (1, 3), "sublinear_tf": True},
+},
+{
+    "run_name": "linearsvc_bigram_c05",
+    "model": LinearSVC(C=0.5, class_weight="balanced", random_state=42, max_iter=2000),
+    "tfidf_params": {"max_features": 8000, "ngram_range": (1, 2), "sublinear_tf": True},
+},
+{
+    "run_name": "sgd_hinge_tfidf_trigram",
+    "model": SGDClassifier(loss="hinge", alpha=1e-4, class_weight="balanced", random_state=42, max_iter=1000, tol=1e-3),
+    "tfidf_params": {"max_features": 8000, "ngram_range": (1, 3), "sublinear_tf": True},
+},
+{
+    "run_name": "gradientboost_n300_lr005",
+    "model": GradientBoostingClassifier(n_estimators=300, learning_rate=0.05, max_depth=4, random_state=42),
+    "tfidf_params": {"max_features": 5000, "ngram_range": (1, 2), "sublinear_tf": True},
+},
 ]
 
 # ── Load & prep data (once) ──────────────────────────────────────────────────

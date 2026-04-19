@@ -42,6 +42,11 @@ backend/mlruns/
 *.egg
 MANIFEST
 
+backend/mlruns/
+backend/mlflow.db
+*.pkl
+Expense_model/*.csv
+
 # Virtual environments
 my_project_venv/
 venv/
