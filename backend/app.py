@@ -19,7 +19,14 @@ import PyPDF2
 import fitz
 import platform
 from ocr_utils import extract_grand_total, remove_non_monetary_numbers, clean_vendor_name
+from dotenv import load_dotenv
+import os
+from groq import Groq
 
+load_dotenv(".env")
+
+groq_api_key = os.getenv("GROQ_API_KEY")
+groq_client = Groq(api_key=groq_api_key)
 
 app = Flask(__name__)
 CORS(app)
@@ -1782,6 +1789,77 @@ def fix_expense_dates():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """AI chatbot endpoint for expense queries using Groq"""
+    try:
+        data = request.json
+        user_message = data.get('message', '')
+        
+        if not user_message:
+            return jsonify({'error': 'No message provided'}), 400
+
+        # Build financial context from expenses_db
+        if expenses_db:
+            total = sum(e['amount'] for e in expenses_db)
+            by_category = defaultdict(float)
+            for e in expenses_db:
+                by_category[e['category']] += e['amount']
+
+            # Top categories
+            top_cats = sorted(by_category.items(), key=lambda x: x[1], reverse=True)
+            top_cats_str = "\n".join(
+                [f"  - {cat}: ₹{amt:.2f}" for cat, amt in top_cats]
+            )
+
+            # Recent expenses (last 5)
+            recent = sorted(expenses_db, key=lambda x: x.get('date',''), reverse=True)[:5]
+            recent_str = "\n".join(
+                [f"  - {e['vendor']} | {e['category']} | ₹{e['amount']} | {e['date']}"
+                 for e in recent]
+            )
+
+            context = f"""
+User's Expense Summary:
+- Total spent: ₹{total:.2f}
+- Number of expenses: {len(expenses_db)}
+- Spending by category:
+{top_cats_str}
+
+Recent transactions:
+{recent_str}
+"""
+        else:
+            context = "The user has no recorded expenses yet."
+
+        system_prompt = f"""You are SmartSpend AI, a helpful personal finance assistant.
+You analyze the user's expense data and give practical, friendly advice.
+Keep answers concise (2-4 sentences). Use ₹ for Indian Rupees.
+If asked about overspending, compare their top category to sensible benchmarks.
+Current expense data:
+{context}"""
+
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=300,
+            temperature=0.7
+        )
+
+        reply = response.choices[0].message.content
+
+        return jsonify({
+            'success': True,
+            'reply': reply
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     print("🚀 Starting SmartSpend ML Backend...")

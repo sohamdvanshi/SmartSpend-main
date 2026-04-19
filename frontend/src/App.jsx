@@ -6,6 +6,7 @@ import UploadCard from "./components/UploadCard";
 import Reports from "./components/Reports";
 import Settings from "./components/Settings";
 import { useState } from "react";
+import ChatBot from "./components/ChatBot";
 
 export default function App() {
   const [page, setPage] = useState("Dashboard");
@@ -25,6 +26,7 @@ export default function App() {
           {content}
         </main>
       </div>
+      <ChatBot /> 
     </div>
   );
 }

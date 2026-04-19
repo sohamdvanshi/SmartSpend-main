@@ -52,6 +52,7 @@ my_project_venv/
 venv/
 env/
 ENV/
+backend/.env
 
 # Node.js
 node_modules/
