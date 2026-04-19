@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-"""
-Production-Ready Ultra-Enhanced Model
-Fixed prediction interface for deployment
-"""
-
+import mlflow
+import mlflow.sklearn
 import pandas as pd
 import numpy as np
 import re
@@ -151,69 +147,73 @@ class ProductionExpenseClassifier:
         return prediction
 
 def train_production_model():
-    """Train production-ready model"""
-    print("🚀 Training Production-Ready Ultra Model")
-    print("=" * 60)
+        """Train production-ready model"""
+        print("🚀 Training Production-Ready Ultra Model")
+        print("=" * 60)
+        mlflow.end_run()
+        mlflow.set_tracking_uri("file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns")
+        mlflow.set_experiment("SmartSpend-Expense-Classifier")
+        print("=" * 60)
     
-    # Load data
-    df = pd.read_csv("../data/exp.csv")
-    print(f"Dataset: {df.shape}")
+        # Load data
+        df = pd.read_csv("../data/exp.csv")
+        print(f"Dataset: {df.shape}")
     
-    # Clean data
-    df_clean = df.copy()
-    df_clean = df_clean.dropna(subset=['Category'])
-    df_clean = df_clean[df_clean['Category'].str.strip() != '']
-    df_clean['Amount'] = pd.to_numeric(df_clean['Amount'], errors='coerce')
-    df_clean = df_clean[df_clean['Amount'] > 0]
-    df_clean['Note'] = df_clean['Note'].fillna('Unknown Transaction').astype(str)
+        # Clean data
+        df_clean = df.copy()
+        df_clean = df_clean.dropna(subset=['Category'])
+        df_clean = df_clean[df_clean['Category'].str.strip() != '']
+        df_clean['Amount'] = pd.to_numeric(df_clean['Amount'], errors='coerce')
+        df_clean = df_clean[df_clean['Amount'] > 0]
+        df_clean['Note'] = df_clean['Note'].fillna('Unknown Transaction').astype(str)
     
-    # Category mapping
-    category_mapping = {
-        'Food': 'Food & Dining', 'food': 'Food & Dining', 'Dinner': 'Food & Dining',
-        'Lunch': 'Food & Dining', 'breakfast': 'Food & Dining', 'Grocery': 'Food & Dining',
-        'snacks': 'Food & Dining', 'Milk': 'Food & Dining', 'Ice cream': 'Food & Dining',
-        'Transportation': 'Transportation', 'Train': 'Transportation', 'auto': 'Transportation',
-        'subscription': 'Bills & Utilities', 'Household': 'Bills & Utilities',
-        'Family': 'Personal & Family', 'Festivals': 'Personal & Family',
-        'Salary': 'Income', 'Interest': 'Income', 'Dividend earned on Shares': 'Income',
-        'Other': 'Miscellaneous', 'Apparel': 'Apparel', 'Gift': 'Gift',
-        'Healthcare': 'Healthcare', 'Medical/Healthcare': 'Healthcare'
-    }
+        # Category mapping
+        category_mapping = {
+            'Food': 'Food & Dining', 'food': 'Food & Dining', 'Dinner': 'Food & Dining',
+            'Lunch': 'Food & Dining', 'breakfast': 'Food & Dining', 'Grocery': 'Food & Dining',
+            'snacks': 'Food & Dining', 'Milk': 'Food & Dining', 'Ice cream': 'Food & Dining',
+            'Transportation': 'Transportation', 'Train': 'Transportation', 'auto': 'Transportation',
+            'subscription': 'Bills & Utilities', 'Household': 'Bills & Utilities',
+            'Family': 'Personal & Family', 'Festivals': 'Personal & Family',
+            'Salary': 'Income', 'Interest': 'Income', 'Dividend earned on Shares': 'Income',
+            'Other': 'Miscellaneous', 'Apparel': 'Apparel', 'Gift': 'Gift',
+            'Healthcare': 'Healthcare', 'Medical/Healthcare': 'Healthcare'
+        }
     
-    df_clean['Category'] = df_clean['Category'].replace(category_mapping)
+        df_clean['Category'] = df_clean['Category'].replace(category_mapping)
     
-    # Keep categories with sufficient samples
-    category_counts = df_clean['Category'].value_counts()
-    valid_categories = category_counts[category_counts >= 20].index
-    df_clean = df_clean[df_clean['Category'].isin(valid_categories)]
+        # Keep categories with sufficient samples
+        category_counts = df_clean['Category'].value_counts()
+        valid_categories = category_counts[category_counts >= 20].index
+        df_clean = df_clean[df_clean['Category'].isin(valid_categories)]
     
-    print(f"Cleaned: {df_clean.shape}")
-    print(f"Categories: {sorted(df_clean['Category'].unique())}")
+        print(f"Cleaned: {df_clean.shape}")
+        print(f"Categories: {sorted(df_clean['Category'].unique())}")
     
-    # Feature engineering
-    def clean_text(text):
-        text = str(text).lower()
-        text = re.sub(r'[^\w\s]', ' ', text)
-        return ' '.join(text.split())
+        # Feature engineering
+        def clean_text(text):
+            text = str(text).lower()
+            text = re.sub(r'[^\w\s]', ' ', text)
+            return ' '.join(text.split())
     
-    def count_keywords(text, keywords):
-        return sum(1 for kw in keywords if kw in text.lower())
+        def count_keywords(text, keywords):
+            return sum(1 for kw in keywords if kw in text.lower())
     
-    df_clean['Note_clean'] = df_clean['Note'].apply(clean_text)
+        df_clean['Note_clean'] = df_clean['Note'].apply(clean_text)
     
-    # Create features
-    df_clean['LogAmount'] = np.log1p(df_clean['Amount'])
-    df_clean['AmountRange'] = pd.cut(df_clean['Amount'], 
+        # Create features
+        df_clean['LogAmount'] = np.log1p(df_clean['Amount'])
+        df_clean['AmountRange'] = pd.cut(df_clean['Amount'], 
                                    bins=[0, 50, 200, 500, 1000, 5000, float('inf')],
                                    labels=[0, 1, 2, 3, 4, 5]).astype(int)
     
-    df_clean['TextLength'] = df_clean['Note_clean'].str.len()
-    df_clean['WordCount'] = df_clean['Note_clean'].str.split().str.len()
-    df_clean['UpperCaseRatio'] = df_clean['Note'].apply(lambda x: sum(1 for c in x if c.isupper()) / len(x) if x else 0)
-    df_clean['DigitRatio'] = df_clean['Note'].apply(lambda x: sum(1 for c in x if c.isdigit()) / len(x) if x else 0)
+        df_clean['TextLength'] = df_clean['Note_clean'].str.len()
+        df_clean['WordCount'] = df_clean['Note_clean'].str.split().str.len()
+        df_clean['UpperCaseRatio'] = df_clean['Note'].apply(lambda x: sum(1 for c in x if c.isupper()) / len(x) if x else 0)
+        df_clean['DigitRatio'] = df_clean['Note'].apply(lambda x: sum(1 for c in x if c.isdigit()) / len(x) if x else 0)
     
-    # Keyword features
-    keyword_categories = {
+        # Keyword features
+        keyword_categories = {
         'food': ['food', 'restaurant', 'chicken', 'pizza', 'meal', 'dining', 'naan', 'curry'],
         'transport': ['taxi', 'auto', 'fuel', 'parking', 'uber', 'transport', 'gas', 'metro'],
         'bills': ['bill', 'electric', 'internet', 'phone', 'subscription', 'utility'],
@@ -223,152 +223,159 @@ def train_production_model():
         'tools': ['tool', 'tools', 'equipment', 'hardware', 'saw', 'hammer', 'drill', 'wrench', 
                  'stanley', 'bosch', 'makita', 'precision', 'manufacturing', 'workshop', 'machinery'],
         'business': ['business', 'office', 'consulting', 'professional', 'service', 'company']
-    }
+        }
     
-    for category, keywords in keyword_categories.items():
-        df_clean[f'{category}_keywords'] = df_clean['Note_clean'].apply(
+        for category, keywords in keyword_categories.items():
+            df_clean[f'{category}_keywords'] = df_clean['Note_clean'].apply(
             lambda x: count_keywords(x, keywords)
-        )
+            )
     
-    # Pattern features
-    df_clean['HasAmountPattern'] = df_clean['Note'].apply(lambda x: 1 if re.search(r'\d+\s*(rs|rupees|inr)', x.lower()) else 0)
-    df_clean['HasTimePattern'] = df_clean['Note'].apply(lambda x: 1 if re.search(r'\d{1,2}:\d{2}', x) else 0)
-    df_clean['HasPlacePattern'] = df_clean['Note'].apply(lambda x: 1 if re.search(r'place\s+\d+', x.lower()) else 0)
+        # Pattern features
+        df_clean['HasAmountPattern'] = df_clean['Note'].apply(lambda x: 1 if re.search(r'\d+\s*(rs|rupees|inr)', x.lower()) else 0)
+        df_clean['HasTimePattern'] = df_clean['Note'].apply(lambda x: 1 if re.search(r'\d{1,2}:\d{2}', x)   else 0)
+        df_clean['HasPlacePattern'] = df_clean['Note'].apply(lambda x: 1 if re.search(r'place\s+\d+', x.    lower()) else 0)
     
-    # Temporal features (simplified)
-    if 'Date' in df_clean.columns:
-        df_clean['Date'] = pd.to_datetime(df_clean['Date'], errors='coerce')
-        df_clean = df_clean.dropna(subset=['Date'])
-        df_clean['DayOfWeek'] = df_clean['Date'].dt.dayofweek
-        df_clean['Month'] = df_clean['Date'].dt.month
-        df_clean['Day'] = df_clean['Date'].dt.day
-        df_clean['IsWeekend'] = (df_clean['DayOfWeek'] >= 5).astype(int)
-        df_clean['IsMonthEnd'] = (df_clean['Day'] >= 25).astype(int)
-        df_clean['IsMonthStart'] = (df_clean['Day'] <= 5).astype(int)
+        # Temporal features (simplified)
+        if 'Date' in df_clean.columns:
+            df_clean['Date'] = pd.to_datetime(df_clean['Date'], errors='coerce')
+            df_clean = df_clean.dropna(subset=['Date'])
+            df_clean['DayOfWeek'] = df_clean['Date'].dt.dayofweek
+            df_clean['Month'] = df_clean['Date'].dt.month
+            df_clean['Day'] = df_clean['Date'].dt.day
+            df_clean['IsWeekend'] = (df_clean['DayOfWeek'] >= 5).astype(int)
+            df_clean['IsMonthEnd'] = (df_clean['Day'] >= 25).astype(int)
+            df_clean['IsMonthStart'] = (df_clean['Day'] <= 5).astype(int)
     
-    # Prepare features
-    print("🔧 Preparing features...")
+        # Prepare features
+        print("🔧 Preparing features...")
     
-    # Text features
-    tfidf = TfidfVectorizer(max_features=500, ngram_range=(1, 2), min_df=2, max_df=0.95)
-    text_features = tfidf.fit_transform(df_clean['Note_clean'])
+        # Text features
+        tfidf = TfidfVectorizer(max_features=500, ngram_range=(1, 2), min_df=2, max_df=0.95)
+        text_features = tfidf.fit_transform(df_clean['Note_clean'])
     
-    # Numeric features
-    numeric_features = [
+        # Numeric features
+        numeric_features = [
         'Amount', 'LogAmount', 'AmountRange', 'TextLength', 'WordCount',
         'UpperCaseRatio', 'DigitRatio', 'food_keywords', 'transport_keywords',
         'bills_keywords', 'shopping_keywords', 'health_keywords', 'entertainment_keywords',
         'HasAmountPattern', 'HasTimePattern', 'HasPlacePattern'
-    ]
+        ]
     
-    # Add temporal features if available
-    if 'DayOfWeek' in df_clean.columns:
-        numeric_features.extend(['DayOfWeek', 'Month', 'Day', 'IsWeekend', 'IsMonthEnd', 'IsMonthStart'])
+        # Add temporal features if available
+        if 'DayOfWeek' in df_clean.columns:
+            numeric_features.extend(['DayOfWeek', 'Month', 'Day', 'IsWeekend', 'IsMonthEnd', 'IsMonthStart'])
     
-    # Filter available features
-    available_features = [feat for feat in numeric_features if feat in df_clean.columns]
-    X_numeric = df_clean[available_features].fillna(0)
+       # Filter available features
+        available_features = [feat for feat in numeric_features if feat in df_clean.columns]
+        X_numeric = df_clean[available_features].fillna(0)
     
-    # Scale features
-    scaler = StandardScaler()
-    X_numeric_scaled = scaler.fit_transform(X_numeric)
+        # Scale features
+        scaler = StandardScaler()
+        X_numeric_scaled = scaler.fit_transform(X_numeric)
     
-    # Combine features
-    X_combined = hstack([text_features, X_numeric_scaled])
-    y = df_clean['Category']
+        # Combine features
+        X_combined = hstack([text_features, X_numeric_scaled])
+        y = df_clean['Category']
     
-    print(f"Features: {X_combined.shape}")
-    print(f"Categories: {y.value_counts().to_dict()}")
+        print(f"Features: {X_combined.shape}")
+        print(f"Categories: {y.value_counts().to_dict()}")
     
-    # Label encoding
-    label_encoder = LabelEncoder()
-    y_encoded = label_encoder.fit_transform(y)
+        # Label encoding
+        label_encoder = LabelEncoder()
+        y_encoded = label_encoder.fit_transform(y)
     
-    # Split data
-    X_train, X_test, y_train, y_test = train_test_split(
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(
         X_combined, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
-    )
+        )
     
-    print(f"Training: {X_train.shape}, Testing: {X_test.shape}")
+        print(f"Training: {X_train.shape}, Testing: {X_test.shape}")
     
-    # Train optimized models
-    print("🤖 Training optimized ensemble...")
+        # Train optimized models
+        print("🤖 Training optimized ensemble...")
     
-    models = {
-        'logistic_regression': LogisticRegression(C=1.5, max_iter=2000, class_weight='balanced'),
-        'random_forest': RandomForestClassifier(n_estimators=200, max_depth=15, 
+        models = {
+            'logistic_regression': LogisticRegression(C=1.5, max_iter=2000, class_weight='balanced'),
+            'random_forest': RandomForestClassifier(n_estimators=200, max_depth=15, 
                                               min_samples_split=5, class_weight='balanced', random_state=42),
-        'gradient_boosting': GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, 
+            'gradient_boosting': GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, 
                                                       max_depth=6, random_state=42)
-    }
+            }
     
-    trained_models = {}
-    for name, model in models.items():
-        print(f"Training {name}...")
-        model.fit(X_train, y_train)
-        score = model.score(X_test, y_test)
-        trained_models[name] = model
-        print(f"{name}: {score:.4f} ({score*100:.2f}%)")
+        trained_models = {}
+        for name, model in models.items():
+            print(f"Training {name}...")
+            model.fit(X_train, y_train)
+            score = model.score(X_test, y_test)
+            trained_models[name] = model
+            print(f"{name}: {score:.4f} ({score*100:.2f}%)")
     
-    # Create ensemble
-    ensemble = VotingClassifier(
-        estimators=[(name, model) for name, model in trained_models.items()],
-        voting='soft'
-    )
+        # Create ensemble
+        ensemble = VotingClassifier(
+            estimators=[(name, model) for name, model in trained_models.items()],
+            voting='soft'
+            )
     
-    ensemble.fit(X_train, y_train)
-    ensemble_score = ensemble.score(X_test, y_test)
+        ensemble.fit(X_train, y_train)
+        ensemble_score = ensemble.score(X_test, y_test)
     
-    print(f"\n🏆 ENSEMBLE ACCURACY: {ensemble_score:.4f} ({ensemble_score*100:.2f}%)")
+        print(f"\n🏆 ENSEMBLE ACCURACY: {ensemble_score:.4f} ({ensemble_score*100:.2f}%)")
     
-    # Cross-validation
-    cv_scores = cross_val_score(ensemble, X_combined, y_encoded, cv=5)
-    print(f"CV Mean: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+        # Cross-validation
+        cv_scores = cross_val_score(ensemble, X_combined, y_encoded, cv=5)
+        print(f"CV Mean: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
+
+        mlflow.start_run()
+        mlflow.log_param("n_estimators_rf", 200)
+        mlflow.log_param("n_estimators_gb", 50)
+        mlflow.log_metric("accuracy", ensemble_score)
+        mlflow.log_metric("cv_mean", cv_scores.mean())
+        mlflow.sklearn.log_model(ensemble, "model")
     
-    # Classification report
-    y_pred = ensemble.predict(X_test)
-    print("\n📋 Classification Report:")
-    # Get unique classes in test set to avoid mismatch
-    unique_test_classes = np.unique(y_test)
-    target_names_subset = [label_encoder.classes_[i] for i in unique_test_classes]
-    print(classification_report(y_test, y_pred, labels=unique_test_classes, target_names=target_names_subset))
+        # Classification report
+        y_pred = ensemble.predict(X_test)
+        print("\n📋 Classification Report:")
+        # Get unique classes in test set to avoid mismatch
+        unique_test_classes = np.unique(y_test)
+        target_names_subset = [label_encoder.classes_[i] for i in unique_test_classes]
+        print(classification_report(y_test, y_pred, labels=unique_test_classes,     target_names=target_names_subset))
     
-    # Create production model
-    production_model = ProductionExpenseClassifier(
+        # Create production model
+        production_model = ProductionExpenseClassifier(
         model=ensemble,
         tfidf=tfidf,
         scaler=scaler,
         numeric_features=available_features,
         label_encoder=label_encoder
-    )
+        )
     
-    # Test production model
-    print("\n🧪 Testing production model...")
-    test_cases = [
+        # Test production model
+        print("\n🧪 Testing production model...")
+        test_cases = [
         "CHICKEN ANGARA GARLIC NAAN restaurant food dining",
         "electricity bill payment utility service",
         "uber taxi ride transport vehicle",
         "amazon shopping electronics purchase"
-    ]
+         ]
     
-    for case in test_cases:
-        pred = production_model.predict({'Note': case, 'Amount': 500})
-        print(f"  {case} → {pred}")
+        for case in test_cases:
+            pred = production_model.predict({'Note': case, 'Amount': 500})
+            print(f"  {case} → {pred}")
     
-    # Save model
-    print("\n💾 Saving production model...")
+        # Save model
+        print("\n💾 Saving production model...")
     
-    with open("../models/expense_model.pkl", 'wb') as f:
-        pickle.dump(ensemble, f)
+        with open("../models/expense_model.pkl", 'wb') as f:
+         pickle.dump(ensemble, f)
     
-    with open("../models/tfidf_vectorizer.pkl", 'wb') as f:
-        pickle.dump(tfidf, f)
+        with open("../models/tfidf_vectorizer.pkl", 'wb') as f:
+            pickle.dump(tfidf, f)
     
-    with open("../models/feature_scaler.pkl", 'wb') as f:
-        pickle.dump(scaler, f)
-    
-    # Save model info
-    model_info = {
+        with open("../models/feature_scaler.pkl", 'wb') as f:
+            pickle.dump(scaler, f)
+
+        # Save model info
+        model_info = {
         "accuracy": float(ensemble_score),
         "cv_mean": float(cv_scores.mean()),
         "cv_std": float(cv_scores.std()),
@@ -379,17 +386,17 @@ def train_production_model():
         "features_count": int(X_combined.shape[1]),
         "improvement": f"+{(ensemble_score - 0.7417)*100:.1f}pp",
         "training_date": datetime.now().isoformat()
-    }
+        }
     
-    with open("../models/model_info.json", "w") as f:
-        json.dump(model_info, f, indent=2)
+        with open("../models/model_info.json", "w") as f:
+         json.dump(model_info, f, indent=2)
     
-    print("✅ Production model saved successfully!")
-    print(f"\n🎯 PRODUCTION MODEL READY!")
-    print(f"   Accuracy: {ensemble_score:.4f} ({ensemble_score*100:.2f}%)")
-    print(f"   Improvement: +{(ensemble_score - 0.7417)*100:.1f} percentage points")
-    
-    return production_model
+        print("✅ Production model saved successfully!")
+        print(f"\n🎯 PRODUCTION MODEL READY!")
+        print(f"   Accuracy: {ensemble_score:.4f} ({ensemble_score*100:.2f}%)")
+        print(f"   Improvement: +{(ensemble_score - 0.7417)*100:.1f} percentage points")
+
+        return production_model
 
 if __name__ == "__main__":
     train_production_model()

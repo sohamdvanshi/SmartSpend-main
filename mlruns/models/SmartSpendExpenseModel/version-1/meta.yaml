@@ -1,0 +1,16 @@
+creation_timestamp: 1776616984772
+current_stage: None
+deployment_job_state: null
+description: null
+last_updated_timestamp: 1776616984772
+model_id: m-7d37954d94824e9285a16b8db5cad537
+name: SmartSpendExpenseModel
+run_id: 008037b923324eb49a2ca754b27233ea
+run_link: null
+source: models:/m-7d37954d94824e9285a16b8db5cad537
+status: READY
+status_message: null
+storage_location: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns/533234721586450421/models/m-7d37954d94824e9285a16b8db5cad537/artifacts
+user_id: null
+version: 1
+workspace: default

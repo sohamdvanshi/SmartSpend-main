@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns/533234721586450421/42f41b54366b490b89afcdd5372b8c3d/artifacts
+end_time: 1776616312045
+entry_point_name: ''
+experiment_id: '533234721586450421'
+lifecycle_stage: active
+run_id: 42f41b54366b490b89afcdd5372b8c3d
+run_name: enthused-skink-316
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1776616311942
+status: 3
+tags: []
+user_id: deole

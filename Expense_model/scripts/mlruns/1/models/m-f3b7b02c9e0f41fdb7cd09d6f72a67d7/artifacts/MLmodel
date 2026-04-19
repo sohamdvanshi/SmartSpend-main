@@ -1,0 +1,23 @@
+artifact_path: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/Expense_model/scripts/mlruns/1/models/m-f3b7b02c9e0f41fdb7cd09d6f72a67d7/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.11.9
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+    skops_trusted_types: null
+mlflow_version: 3.11.1
+model_id: m-f3b7b02c9e0f41fdb7cd09d6f72a67d7
+model_size_bytes: 25939923
+model_uuid: m-f3b7b02c9e0f41fdb7cd09d6f72a67d7
+prompts: null
+run_id: 41750e9691f74a9ea36c7d65a03cde00
+utc_time_created: '2026-04-19 16:11:40.281927'

@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns/533234721586450421/ad69277a5fe344bcaaf3718bd7bbc28f/artifacts
+end_time: 1776616414461
+entry_point_name: ''
+experiment_id: '533234721586450421'
+lifecycle_stage: active
+run_id: ad69277a5fe344bcaaf3718bd7bbc28f
+run_name: useful-mole-937
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1776616414387
+status: 3
+tags: []
+user_id: deole

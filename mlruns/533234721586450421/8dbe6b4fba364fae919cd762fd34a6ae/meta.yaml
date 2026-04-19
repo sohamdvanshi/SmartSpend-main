@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns/533234721586450421/8dbe6b4fba364fae919cd762fd34a6ae/artifacts
+end_time: 1776616399559
+entry_point_name: ''
+experiment_id: '533234721586450421'
+lifecycle_stage: active
+run_id: 8dbe6b4fba364fae919cd762fd34a6ae
+run_name: chill-snail-861
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1776616399481
+status: 3
+tags: []
+user_id: deole

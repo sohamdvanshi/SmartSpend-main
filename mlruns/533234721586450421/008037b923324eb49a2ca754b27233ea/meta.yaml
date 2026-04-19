@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns/533234721586450421/008037b923324eb49a2ca754b27233ea/artifacts
+end_time: 1776616786100
+entry_point_name: ''
+experiment_id: '533234721586450421'
+lifecycle_stage: active
+run_id: 008037b923324eb49a2ca754b27233ea
+run_name: selective-eel-906
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1776616777276
+status: 3
+tags: []
+user_id: deole

@@ -1,0 +1,7 @@
+.venv
+__pycache__
+*.pyc
+mlruns
+Expense_model/data
+frontend/node_modules
+.git

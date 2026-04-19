@@ -1,0 +1,10 @@
+artifact_location: file:///C:/Users/deole/Desktop/python/ML/SCE/SmartSpend-main/mlruns/533234721586450421/models/m-7d37954d94824e9285a16b8db5cad537/artifacts
+creation_timestamp: 1776616777386
+experiment_id: '533234721586450421'
+last_updated_timestamp: 1776616785802
+model_id: m-7d37954d94824e9285a16b8db5cad537
+model_type: null
+name: model
+source_run_id: 008037b923324eb49a2ca754b27233ea
+status: 2
+status_message: null
