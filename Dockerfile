@@ -2,19 +2,33 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+# Install system dependencies:
+# - tesseract-ocr: required by pytesseract in app.py
+# - poppler-utils: required by pdfplumber for PDF processing
+# - libgl1, libglib2.0-0: required by OpenCV (cv2)
+# - libsm6, libxext6, libxrender1: additional OpenCV deps
+RUN apt-get update && apt-get install -y \
+    tesseract-ocr \
+    poppler-utils \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy backend files
-COPY backend/ ./backend/
-
-# Copy trained model files
-COPY Expense_model/models/ ./Expense_model/models/
-
-# Install dependencies
+# Copy and install Python dependencies first (layer caching)
+COPY backend/requirements.txt ./backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Expose the port your Flask app runs on
+# Copy backend source code
+COPY backend/ ./backend/
+
+# Copy trained ML model files
+COPY Expense_model/models/ ./Expense_model/models/
+
+# Expose Flask port
 EXPOSE 5000
 
-# Start the backend
+# Start the Flask backend
 CMD ["python", "backend/app.py"]
