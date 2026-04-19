@@ -12,7 +12,7 @@ from scipy.sparse import hstack
 from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 
 
@@ -86,24 +86,34 @@ def count_keywords(text, keywords):
     return sum(1 for kw in keywords if kw in text_lower)
 
 
-def build_features(df, text_col, amount_col):
+def build_features(df, text_col, amount_col, date_col=None):
     notes = df[text_col].fillna("").astype(str)
     amounts = pd.to_numeric(df[amount_col], errors="coerce").fillna(0.0)
+
+    # Parse dates from the dataset if a date column exists
+    # FIX: use actual expense dates instead of today's date
+    if date_col and date_col in df.columns:
+        dates = pd.to_datetime(df[date_col], errors="coerce")
+    else:
+        dates = pd.Series([pd.NaT] * len(df))
 
     note_clean = notes.apply(clean_text)
 
     feature_rows = []
-    for raw_note, note, amount in zip(notes, note_clean, amounts):
+    for i, (raw_note, note, amount) in enumerate(zip(notes, note_clean, amounts)):
+        # Use actual expense date if available, else fall back to today
+        expense_date = dates.iloc[i] if dates.iloc[i] is not pd.NaT else pd.Timestamp.now()
+
         row = {
             "Amount": float(amount),
             "LogAmount": float(np.log1p(max(amount, 0))),
             "AmountRange": get_amount_range(float(amount)),
-            "DayOfWeek": pd.Timestamp.now().dayofweek,
-            "Month": pd.Timestamp.now().month,
-            "Day": pd.Timestamp.now().day,
-            "IsWeekend": 1 if pd.Timestamp.now().dayofweek >= 5 else 0,
-            "IsMonthEnd": 1 if pd.Timestamp.now().day >= 25 else 0,
-            "IsMonthStart": 1 if pd.Timestamp.now().day <= 5 else 0,
+            "DayOfWeek": expense_date.dayofweek,
+            "Month": expense_date.month,
+            "Day": expense_date.day,
+            "IsWeekend": 1 if expense_date.dayofweek >= 5 else 0,
+            "IsMonthEnd": 1 if expense_date.day >= 25 else 0,
+            "IsMonthStart": 1 if expense_date.day <= 5 else 0,
             "TextLength": len(note),
             "WordCount": len(note.split()),
             "UpperCaseRatio": sum(1 for c in raw_note if c.isupper()) / len(raw_note) if raw_note else 0,
@@ -133,8 +143,9 @@ def main():
     text_col = find_column(df, ["Note", "Description", "description", "note", "Item", "Expense"])
     amount_col = find_column(df, ["Amount", "amount", "Price", "price", "Total", "total"])
     target_col = find_column(df, ["Category", "category", "Label", "label", "Type", "type"])
+    date_col = find_column(df, ["Date", "date", "DateTime", "datetime", "Timestamp"], required=False)
 
-    df = df[[text_col, amount_col, target_col]].copy()
+    df = df[[text_col, amount_col, target_col] + ([date_col] if date_col else [])].copy()
     df[text_col] = df[text_col].fillna("").astype(str)
     df[amount_col] = pd.to_numeric(df[amount_col], errors="coerce").fillna(0.0)
     df[target_col] = df[target_col].fillna("").astype(str)
@@ -145,7 +156,7 @@ def main():
     if len(df) < 10:
         raise ValueError("Dataset is too small. Add more labeled rows to exp.csv.")
 
-    X_text, X_numeric = build_features(df, text_col, amount_col)
+    X_text, X_numeric = build_features(df, text_col, amount_col, date_col)
     y = df[target_col]
 
     numeric_features = X_numeric.columns.tolist()
@@ -162,10 +173,11 @@ def main():
     )
 
     tfidf = TfidfVectorizer(
-        max_features=3000,
-        ngram_range=(1, 2),
+        max_features=5000,
+        ngram_range=(1, 3),
         min_df=1,
-        max_df=0.95
+        max_df=0.9,
+        sublinear_tf=True
     )
     X_text_train_tfidf = tfidf.fit_transform(X_text_train)
     X_text_test_tfidf = tfidf.transform(X_text_test)
@@ -177,10 +189,11 @@ def main():
     X_train = hstack([X_text_train_tfidf, X_num_train_scaled])
     X_test = hstack([X_text_test_tfidf, X_num_test_scaled])
 
-    model = LogisticRegression(
-        max_iter=2000,
+    model = RandomForestClassifier(
+        n_estimators=200,
         class_weight="balanced",
-        random_state=42
+        random_state=42,
+        n_jobs=-1
     )
     model.fit(X_train, y_train)
 
@@ -218,13 +231,15 @@ def main():
 
     mlflow.set_experiment("SmartSpend-Expense-Classification")
 
-    with mlflow.start_run(run_name="logreg_tfidf_numeric"):
-        mlflow.log_param("algorithm", "LogisticRegression")
-        mlflow.log_param("max_iter", 2000)
+    with mlflow.start_run(run_name="randomforest_tfidf_numeric"):
+        mlflow.log_param("algorithm", "RandomForestClassifier")
+        mlflow.log_param("n_estimators", 200)
         mlflow.log_param("class_weight", "balanced")
         mlflow.log_param("random_state", 42)
-        mlflow.log_param("tfidf_max_features", 3000)
-        mlflow.log_param("tfidf_ngram_range", "(1,2)")
+        mlflow.log_param("tfidf_max_features", 5000)
+        mlflow.log_param("tfidf_ngram_range", "(1,3)")
+        mlflow.log_param("tfidf_sublinear_tf", True)
+        mlflow.log_param("date_col_used", date_col if date_col else "none")
         mlflow.log_param("train_rows", int(len(X_text_train)))
         mlflow.log_param("test_rows", int(len(X_text_test)))
         mlflow.log_param("num_classes", int(y.nunique()))
@@ -249,6 +264,7 @@ def main():
     print(f"Weighted F1: {weighted_f1:.4f}")
     if cv_folds > 0:
         print(f"CV Accuracy ({cv_folds}-fold): {cv_mean:.4f}")
+    print(f"Date column used: {date_col if date_col else 'none (fallback to today)'}")
     print(f"Saved model: {model_path}")
     print(f"Saved TF-IDF: {tfidf_path}")
     print(f"Saved scaler: {scaler_path}")
