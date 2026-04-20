@@ -1,5 +1,5 @@
 outs:
-- md5: 219a2cce879936ad252fedb2ea33e25f
-  size: 709327
+- md5: d2b846af49a6470a42dc795469b97982
+  size: 166340
   hash: md5
   path: expense_model.pkl
