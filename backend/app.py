@@ -26,7 +26,7 @@ from groq import Groq
 load_dotenv(".env")
 
 groq_api_key = os.getenv("GROQ_API_KEY")
-groq_client = Groq(api_key=groq_api_key)
+groq_client = Groq(api_key=groq_api_key) if groq_api_key else None
 
 app = Flask(__name__)
 CORS(app)
@@ -1793,6 +1793,8 @@ def fix_expense_dates():
 @app.route('/api/chat', methods=['POST'])
 def chat():
     """AI chatbot endpoint for expense queries using Groq"""
+    if not groq_client:
+        return jsonify({'error': 'Chat unavailable: GROQ_API_KEY not configured'}), 503
     try:
         data = request.json
         user_message = data.get('message', '')

@@ -1,4 +1,4 @@
 [core]
     remote = myremote
 ['remote "myremote"']
-    url = gdrive://1HrwyrKF1-u6sA_d8T01G4ZRiwagTj_BT
+    url = ../smartspend-dvc-storage
