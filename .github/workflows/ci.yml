@@ -33,6 +33,11 @@ jobs:
           python -c "from app import app; print('✅ App loaded successfully')"
           python -c "from app import app; [print(r) for r in app.url_map.iter_rules()]"
 
+      - name: Run smoke test
+        env:
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python -c "from app import app; print('✅ App loaded successfully')"
+
   # Job 2: Docker Build + Smoke Test
   docker-build:
     name: Build & Test Docker Image

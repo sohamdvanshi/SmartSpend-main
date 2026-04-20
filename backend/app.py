@@ -3,7 +3,7 @@ from flask_cors import CORS
 import cv2
 import numpy as np
 import pandas as pd
-import pytesseract
+from paddleocr import PaddleOCR
 import re
 from datetime import datetime, timedelta
 import dateutil.parser as date_parser
@@ -40,35 +40,21 @@ expense_id_counter = 1
 import fitz  # PyMuPDF
 import platform
 
-if platform.system() == "Windows":
-    # Common Tesseract installation paths on Windows
-    possible_paths = [
-        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
-        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
-        r'C:\Users\kthul\AppData\Local\Programs\Tesseract-OCR\tesseract.exe',
-        r'C:\Users\kthul\AppData\Local\Microsoft\WinGet\Packages\UB-Mannheim.TesseractOCR_Microsoft.Winget.Source_8wekyb3d8bbwe\tesseract.exe'
-    ]
-    
-    for path in possible_paths:
-        if os.path.exists(path):
-            pytesseract.pytesseract.tesseract_cmd = path
-            print(f"✅ Found Tesseract at: {path}")
-            break
-    else:
-        # Try to find tesseract in PATH
-        import shutil
-        tesseract_path = shutil.which('tesseract')
-        if tesseract_path:
-            pytesseract.pytesseract.tesseract_cmd = tesseract_path
-            print(f"✅ Found Tesseract in PATH: {tesseract_path}")
-        else:
-            print("⚠️ Warning: Tesseract not found in common locations")
-            print("   Please install Tesseract OCR or update the path in app.py")
 
 class BillExtractor:
     def __init__(self):
         self.expense_model = load_expense_classifier()
         self.enhanced_features = self.expense_model is not None
+
+        try:
+            self.ocr = PaddleOCR(
+                use_textline_orientation=True,
+                lang='en'
+            )
+            print("✅ PaddleOCR initialized")
+        except Exception as e:
+            self.ocr = None
+            print(f"⚠️ PaddleOCR initialization failed: {e}")
 
         if self.expense_model:
             print("✅ Expense classifier loaded through ml_model.py")
@@ -97,71 +83,70 @@ class BillExtractor:
         return cleaned
     
     def extract_text_from_image(self, image):
-        """Extract text from image using OCR"""
+    
         try:
-            # Check if Tesseract is available
-            try:
-                pytesseract.get_tesseract_version()
-                tesseract_available = True
-                print("✅ Tesseract is available")
-            except:
-                tesseract_available = False
-                print("⚠️ Tesseract not available")
-            
-            if not tesseract_available:
-                # Instead of using demo data, try basic image analysis
-                print("🔍 Using basic image analysis fallback...")
-                
-                # Simple image analysis to detect if this might be a different bill
+            if self.ocr is None:
+                print("⚠️ PaddleOCR not available")
                 height, width = image.shape[:2] if len(image.shape) > 2 else image.shape
                 total_pixels = height * width
-                
-                # Very basic text extraction attempt
-                # For now, return a basic template that will trigger manual entry
                 return f"""
                 MANUAL_ENTRY_REQUIRED
                 Image Size: {width}x{height}
                 Total Pixels: {total_pixels}
-                
+
                 Please manually enter bill details:
                 - Vendor: [Enter vendor name]
                 - Amount: [Enter amount]
                 - Date: [Enter date]
                 - Category: [Select category]
-                
-                Note: Install Tesseract OCR for automatic text extraction.
+
+                Note: PaddleOCR is not initialized.
                 """
-            
-            # Preprocess the image
+
             processed_image = self.preprocess_image(image)
-            
-            # Try different OCR configurations for better results
-            configs = [
-                '--psm 6',  # Uniform block of text
-                '--psm 4',  # Single column of text
-                '--psm 3',  # Default
-                '--psm 12'  # Raw line text
-            ]
-            
-            best_text = ""
-            max_length = 0
-            
-            for config in configs:
-                try:
-                    text = pytesseract.image_to_string(processed_image, config=config)
-                    if len(text.strip()) > max_length:
-                        max_length = len(text.strip())
-                        best_text = text
-                except:
-                    continue
-            
-            # If OCR failed, try with original image
+
+            # Convert grayscale to BGR for PaddleOCR if needed
+            if len(processed_image.shape) == 2:
+                ocr_input = cv2.cvtColor(processed_image, cv2.COLOR_GRAY2BGR)
+            else:
+                ocr_input = processed_image
+
+            # NO 'cls=True' here -- it's set during initialization
+            result = self.ocr.ocr(ocr_input)
+
+            extracted_lines = []
+            if result and len(result) > 0 and result[0]:
+                for line in result[0]:
+                    if line and len(line) == 2:
+                        text = line[1][0]
+                        confidence = line[1][1]
+                        if confidence > 0.4 and text.strip():
+                            extracted_lines.append(text.strip())
+
+            best_text = "\n".join(extracted_lines)
+
             if not best_text.strip():
-                best_text = pytesseract.image_to_string(image, config='--psm 6')
-            
-            print(f"📄 OCR extracted {len(best_text)} characters")
+                # Try original image as fallback
+                if len(image.shape) == 2:
+                    fallback_input = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+                else:
+                    fallback_input = image
+
+                result = self.ocr.ocr(fallback_input)
+                extracted_lines = []
+                if result and len(result) > 0 and result[0]:
+                    for line in result[0]:
+                        if line and len(line) == 2:
+                            text = line[1][0]
+                            confidence = line[1][1]
+                            if confidence > 0.4 and text.strip():
+                                extracted_lines.append(text.strip())
+
+                best_text = "\n".join(extracted_lines)
+
+            print(f"📄 PaddleOCR extracted {len(best_text)} characters")
             return best_text
-            
+
         except Exception as e:
             print(f"❌ OCR Error: {e}")
             return f"OCR Error: {str(e)}"
