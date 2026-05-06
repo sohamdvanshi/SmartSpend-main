@@ -6,7 +6,7 @@ as monetary amounts (e.g. Bangalore-560037 → ₹1037 instead of ₹940).
 """
 
 import re
-
+from datetime import datetime
 
 # ── Noise removal ────────────────────────────────────────────────────────────
 
@@ -83,8 +83,6 @@ def extract_grand_total(text: str):
     return None
 
 
-# ── Vendor-name cleaner ───────────────────────────────────────────────────────
-
 def clean_vendor_name(raw: str) -> str:
     """
     Light cleanup for vendor names that OCR garbled.
@@ -99,3 +97,107 @@ def clean_vendor_name(raw: str) -> str:
     # Collapse whitespace
     cleaned = re.sub(r'\s+', ' ', cleaned)
     return cleaned.title() if cleaned else raw
+
+def extract_upi_payment(text):
+    """
+    Detects GPay/PhonePe/Paytm UPI screenshots and extracts fields.
+    Returns dict or None if not a UPI screenshot.
+    """
+    if not text:
+        return None
+
+    text_lower = text.lower()
+
+    # Must have UPI signals to proceed
+    upi_signals = ['upi transaction id', 'upi txn', 'transaction id', 
+                   'upiintent', 'upi intent', 'google pay', 'phonepe', 
+                   'paytm', 'completed', 'payu@', '@okicici', '@oksbi',
+                   '@ybl', '@ibl', '@axl']
+    
+    if not any(signal in text_lower for signal in upi_signals):
+        return None
+
+    result = {}
+
+    amount_patterns = [
+    r'(?:₹|rs\.?|inr)\s*([0-9,]+(?:\.[0-9]{1,2})?)',   # ₹1144.05
+    r'(?:to\s+\S+\s+)([0-9,]+\.[0-9]{2})',              # "To IRCTC 1144.05"
+    r'^([0-9,]+\.[0-9]{2})$',                            # standalone decimal amount on its own line
+    ]
+    text_clean = re.sub(r'(?:icici|sbi|hdfc|axis|kotak|indus)\s+bank\s+\d{4}', '', text, flags=re.IGNORECASE)
+    for pattern in amount_patterns:
+     amount_match = re.search(pattern, text_clean, re.IGNORECASE | re.MULTILINE)
+     if amount_match:
+        val = float(amount_match.group(1).replace(',', ''))
+        if val > 10:   # skip tiny numbers and 4-digit bank account suffixes
+            result['amount'] = val
+            break
+    
+    # --- UPI TRANSACTION ID ---
+    # "UPI transaction ID\n612634777086"
+    txn_match = re.search(
+        r'upi\s+transaction\s+id\s*[:\n\r]+\s*([A-Za-z0-9]+)',
+        text, re.IGNORECASE
+    )
+    if txn_match:
+        result['upi_txn_id'] = txn_match.group(1).strip()
+    
+    # Fallback: "UPI Ref No" or just a 12-digit number after "transaction"
+    if 'upi_txn_id' not in result:
+        txn_fallback = re.search(
+            r'(?:transaction\s+id|txn\s+id|ref\s+no)[^\d]*(\d{10,15})',
+            text, re.IGNORECASE
+        )
+        if txn_fallback:
+            result['upi_txn_id'] = txn_fallback.group(1)
+
+    # --- VENDOR (To field) ---
+    # "To www.pmpml.org" or "To: www.pmpml.org"
+    vendor_match = re.search(
+        r'to\s*:?\s*([\w\.\-]+\.(?:org|com|in|net|co\.in))',
+        text, re.IGNORECASE
+    )
+    if vendor_match:
+        result['vendor'] = vendor_match.group(1).strip()
+    else:
+        # Fallback: UPI handle after "To:"
+        upi_handle = re.search(
+            r'to\s*:?\s*([\w\.\-]+@[\w]+)',
+            text, re.IGNORECASE
+        )
+        if upi_handle:
+            result['vendor'] = upi_handle.group(1).strip()
+
+    # --- DATE ---
+    # "6 May 2026, 7:03 pm"
+    date_match = re.search(
+        r'(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})',
+        text, re.IGNORECASE
+    )
+    if date_match:
+        try:
+            parsed = datetime.strptime(date_match.group(1).strip(), '%d %B %Y')
+            result['date'] = parsed.strftime('%Y-%m-%d')
+        except:
+            result['date'] = datetime.now().strftime('%Y-%m-%d')
+    else:
+        result['date'] = datetime.now().strftime('%Y-%m-%d')
+
+    vendor_lower = result.get('vendor', '').lower()
+    note_lower   = text.lower()
+
+    if any(w in vendor_lower or w in note_lower for w in ['pmpml', 'irctc', 'railways', 'metro', 'bus', 'ola', 'uber', 'rapido']):
+        result['category'] = 'Transportation'
+    elif any(w in vendor_lower or w in note_lower for w in ['zomato', 'swiggy', 'food', 'restaurant', 'cafe']):
+        result['category'] = 'Food & Dining'
+    elif any(w in vendor_lower or w in note_lower for w in ['airtel', 'jio', 'bsnl', 'electricity', 'broadband']):
+        result['category'] = 'Bills & Utilities'
+    elif any(w in vendor_lower or w in note_lower for w in ['amazon', 'flipkart', 'myntra', 'swiggy instamart', 'blinkit']):
+        result['category'] = 'Shopping'
+    elif any(w in vendor_lower or w in note_lower for w in ['hospital', 'pharmacy', 'apollo', 'medplus']):
+        result['category'] = 'Healthcare'
+    else:
+        result['category'] = 'Miscellaneous'    
+
+    # Only return if we got at least amount
+    return result if 'amount' in result else None

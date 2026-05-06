@@ -3,37 +3,34 @@ import { motion } from "framer-motion";
 import { Settings, Target, TrendingUp, AlertTriangle } from "lucide-react";
 
 export default function BudgetProgressCard() {
-  const [budget, setBudget] = useState(10000); // Default budget of ₹10,000
+  const [budget, setBudget] = useState(10000);
   const [spent, setSpent] = useState(0);
   const [expenses, setExpenses] = useState([]);
   const [showBudgetSetter, setShowBudgetSetter] = useState(false);
   const [newBudget, setNewBudget] = useState('10000');
-
-  // Calculate current month's expenses
-  useEffect(() => {
-    fetchExpenses();
-    
-    // Listen for new expenses
-    const handleExpenseAdded = () => {
-      fetchExpenses();
-    };
-    
-    window.addEventListener('expenseAdded', handleExpenseAdded);
-    return () => window.removeEventListener('expenseAdded', handleExpenseAdded);
-  }, []);
 
   const fetchExpenses = async () => {
     try {
       const response = await fetch('http://localhost:5000/api/expenses');
       if (response.ok) {
         const data = await response.json();
-        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-        
-        const monthlyExpenses = data.expenses.filter(expense => 
-          expense.date.startsWith(currentMonth)
+
+        // ✅ FIX: Use last 30 days instead of strict calendar month
+        // This way Mar 30 2026 expenses ARE counted in April 2026
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const monthlyExpenses = data.expenses.filter(expense => {
+          try {
+            return new Date(expense.date) >= thirtyDaysAgo;
+          } catch {
+            return false;
+          }
+        });
+
+        const totalSpent = monthlyExpenses.reduce(
+          (sum, expense) => sum + parseFloat(expense.amount || 0), 0
         );
-        
-        const totalSpent = monthlyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
         setSpent(totalSpent);
         setExpenses(monthlyExpenses);
       }
@@ -41,6 +38,28 @@ export default function BudgetProgressCard() {
       console.error('Error fetching expenses:', error);
     }
   };
+
+  // Fetch on mount + listen for new expense events
+  useEffect(() => {
+    fetchExpenses();
+
+    const handleExpenseAdded = () => {
+      fetchExpenses();
+    };
+
+    window.addEventListener('expenseAdded', handleExpenseAdded);
+    return () => window.removeEventListener('expenseAdded', handleExpenseAdded);
+  }, []);
+
+  // Load budget from localStorage on mount
+  useEffect(() => {
+    const savedBudget = localStorage.getItem('monthlyBudget');
+    if (savedBudget && parseFloat(savedBudget) > 0) {
+      const budgetValue = parseFloat(savedBudget);
+      setBudget(budgetValue);
+      setNewBudget(budgetValue.toString());
+    }
+  }, []);
 
   const percent = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
   const remaining = budget - spent;
@@ -51,20 +70,9 @@ export default function BudgetProgressCard() {
     if (budgetValue > 0) {
       setBudget(budgetValue);
       setShowBudgetSetter(false);
-      // Save to localStorage for persistence
       localStorage.setItem('monthlyBudget', budgetValue.toString());
     }
   };
-
-  // Load budget from localStorage on component mount
-  useEffect(() => {
-    const savedBudget = localStorage.getItem('monthlyBudget');
-    if (savedBudget && parseFloat(savedBudget) > 0) {
-      const budgetValue = parseFloat(savedBudget);
-      setBudget(budgetValue);
-      setNewBudget(budgetValue.toString());
-    }
-  }, []);
 
   const getProgressColor = () => {
     if (isOverBudget) return 'bg-red-500';
@@ -80,12 +88,12 @@ export default function BudgetProgressCard() {
   };
 
   return (
-    <motion.div 
-      className="bg-white rounded-xl shadow p-6 flex flex-col gap-4" 
-      initial={{ opacity: 0, y: 20 }} 
+    <motion.div
+      className="bg-white rounded-xl shadow p-6 flex flex-col gap-4"
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      {/* Header with title and settings */}
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           {getStatusIcon()}
@@ -136,8 +144,6 @@ export default function BudgetProgressCard() {
             style={{ width: `${Math.min(percent, 100)}%` }}
           ></div>
         </div>
-        
-        {/* Status Text */}
         <div className="flex justify-between text-sm">
           <span className={`font-medium ${isOverBudget ? 'text-red-600' : 'text-gray-700'}`}>
             ₹{spent.toFixed(2)} spent
@@ -165,7 +171,7 @@ export default function BudgetProgressCard() {
         </div>
       </div>
 
-      {/* Warning for over-budget */}
+      {/* Over Budget Warning */}
       {isOverBudget && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3">
           <div className="flex items-center gap-2">
@@ -178,7 +184,7 @@ export default function BudgetProgressCard() {
         </div>
       )}
 
-      {/* Progress Status */}
+      {/* Approaching Limit Warning */}
       {!isOverBudget && percent > 80 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <div className="flex items-center gap-2">

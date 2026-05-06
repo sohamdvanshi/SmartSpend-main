@@ -92,7 +92,15 @@ def build_features(df, text_col, amount_col, date_col=None):
             "Month": expense_date.month,
             "IsWeekend": 1 if expense_date.dayofweek >= 5 else 0,
             "TextLength": len(note),
-            "WordCount": len(note.split())
+            "WordCount": len(note.split()),
+            "Day":              expense_date.day,
+            "IsMonthEnd":       1 if expense_date.day >= 25 else 0,
+            "IsMonthStart":     1 if expense_date.day <= 5 else 0,
+            "UpperCaseRatio":   sum(1 for c in raw_note if c.isupper()) / len(raw_note) if raw_note else 0,
+            "DigitRatio":       sum(1 for c in raw_note if c.isdigit()) / len(raw_note) if raw_note else 0,
+            "HasAmountPattern": 1 if re.search(r'\d+\s*(rs|rupees|inr|\$)', raw_note.lower()) else 0,
+            "HasTimePattern":   1 if re.search(r'\d{1,2}:\d{2}', raw_note) else 0,
+            "HasPlacePattern":  1 if re.search(r'place\s+\d+', raw_note.lower()) else 0,
         }
 
         for category, keywords in KEYWORD_CATEGORIES.items():
@@ -161,6 +169,10 @@ def main():
     joblib.dump(model, os.path.join(MODELS_DIR, "expense_model.pkl"))
     joblib.dump(tfidf, os.path.join(MODELS_DIR, "tfidf_vectorizer.pkl"))
     joblib.dump(scaler, os.path.join(MODELS_DIR, "feature_scaler.pkl"))
+    numeric_feature_names = list(X_numeric.columns)
+    pd.DataFrame({"feature": numeric_feature_names}).to_csv(
+    os.path.join(MODELS_DIR, "numeric_features.csv"), index=False)
+    print(f"✅ Saved {len(numeric_feature_names)} numeric features to numeric_features.csv")
 
     # MLflow
     mlflow.set_experiment("SmartSpend-Expense-Classification")

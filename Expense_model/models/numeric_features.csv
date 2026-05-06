@@ -4,12 +4,12 @@ LogAmount
 AmountRange
 DayOfWeek
 Month
-Day
 IsWeekend
-IsMonthEnd
-IsMonthStart
 TextLength
 WordCount
+Day
+IsMonthEnd
+IsMonthStart
 UpperCaseRatio
 DigitRatio
 HasAmountPattern

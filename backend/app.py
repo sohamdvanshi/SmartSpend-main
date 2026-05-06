@@ -18,7 +18,7 @@ import pdfplumber
 import PyPDF2
 import fitz
 import platform
-from ocr_utils import extract_grand_total, remove_non_monetary_numbers, clean_vendor_name
+from ocr_utils import extract_grand_total, remove_non_monetary_numbers, clean_vendor_name,extract_upi_payment
 from dotenv import load_dotenv
 import os
 from groq import Groq
@@ -882,27 +882,20 @@ class BillExtractor:
         return items
     
     def categorize_expense(self, description, amount):
-        """
-        Use rule-based logic first.
-        If that gives a strong category, return it.
-        Otherwise use the trained ML model through ml_model.py.
-        """
-        rule_based_category = self._fallback_categorization(description, amount)
-
-        if rule_based_category != "Miscellaneous":
-            print(f"🎯 Rule-based categorization: '{rule_based_category}' for '{str(description)[:50]}...'")
-            return rule_based_category
-
-        if not self.expense_model:
-            return rule_based_category
-
-        try:
+        if self.expense_model:
+         try:
             ml_category = predict_expense_category(self.expense_model, description, amount)
-            print(f"🤖 ML prediction: '{ml_category}'")
-            return ml_category
-        except Exception as e:
-            print(f"❌ Error in ML categorization: {e}")
-            return rule_based_category
+            if ml_category and ml_category != "Miscellaneous":
+                # ✅ Override ML if telecom vendor detected
+                desc_lower = description.lower()
+                if any(w in desc_lower for w in ['airtel', 'jio', 'bsnl', 'telemedia', 
+                                                   'broadband', 'wifi', 'vodafone']):
+                    return 'Bills & Utilities'
+                return ml_category
+         except Exception as e:
+            print(f"❌ ML failed: {e}")
+
+        return self._fallback_categorization(description, amount)
 
     
     def _fallback_categorization(self, description, amount):
@@ -1097,6 +1090,18 @@ class BillExtractor:
             'buy', 'shopping', 'clothes', 'electronics', 'cosmetics', 'jewelry', 'accessories'
         ]):
             return 'Shopping'
+        
+        telecom_keywords = [
+            'airtel', 'bharti airtel', 'jio', 'reliance jio', 'bsnl', 'vodafone',
+            'vi ', ' vi\n', 'idea cellular', 'tata sky', 'tata play',
+            'telemedia', 'broadband', 'wifi', 'fiber', 'fibre',
+            'postpaid', 'prepaid bill', 'mobile bill', 'internet bill',
+            'data plan', 'monthly plan', 'bill date', 'due date',
+            'gstin 29aaacb'  # Airtel's GST number starts with this
+        ]
+
+        if any(keyword in description_lower for keyword in telecom_keywords):
+         return 'Bills & Utilities'
 
         # Transportation (be more specific to avoid conflicts)
         transportation_specific = [
@@ -1509,51 +1514,65 @@ class BillExtractor:
 # Initialize the bill extractor
 bill_extractor = BillExtractor()
 
+app = Flask(__name__)
+CORS(app)
+
+expenses_db = []
+expense_id_counter = 1
+
+MONTHLY_BUDGET = 5000.0
+
 @app.route('/api/process-bill', methods=['POST'])
 def process_bill():
-    """API endpoint to process uploaded bill image or PDF"""
     try:
-        # Check for PDF file
         if 'pdf' in request.files:
             file = request.files['pdf']
             if file.filename == '':
                 return jsonify({'error': 'No PDF file selected'}), 400
-            
-            # Extract text from PDF
+
             extracted_text = bill_extractor.extract_text_from_pdf(file.stream)
-            
-            # Process the extracted text
             result = bill_extractor.process_bill_text(extracted_text)
             result['file_type'] = 'pdf'
             result['filename'] = file.filename
-            
             return jsonify(result)
-        
-        # Check for image file
-        elif 'image' in request.files or 'image_data' in request.json:
+
+        elif 'image' in request.files or (request.json and 'image_data' in request.json):
             if 'image' in request.files:
-                # Handle file upload
                 file = request.files['image']
                 image = Image.open(file.stream)
                 image_array = np.array(image)
                 filename = file.filename
             else:
-                # Handle base64 image data
-                image_data = request.json['image_data']
-                image_array = image_data
+                image_array = request.json['image_data']
                 filename = 'uploaded_image'
-            
-            # Process the bill image
+
+            ocr_text = bill_extractor.extract_text_from_image(image_array)
+
+            # ✅ UPI check — outside try/except so errors bubble up properly
+            upi_data = extract_upi_payment(ocr_text)
+            if upi_data:
+                return jsonify({
+                    "success":  True,
+                    "amount":   upi_data.get("amount"),
+                    "vendor":   upi_data.get("vendor", "UPI Payment"),
+                    "date":     upi_data.get("date", datetime.now().strftime("%Y-%m-%d")),
+                    "category": upi_data.get("category", "Transportation"),
+                    "note":     f"UPI TXN: {upi_data.get('upi_txn_id', '')}",
+                    "source":   "upi_screenshot"
+                })
+
+            # ✅ Normal bill processing if not UPI
             result = bill_extractor.process_bill(image_array)
             result['file_type'] = 'image'
             result['filename'] = filename
-            
             return jsonify(result)
-        
+
         else:
             return jsonify({'error': 'No image or PDF file provided'}), 400
-        
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()           # ← shows real error in terminal
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/categorize-expense', methods=['POST'])
@@ -1659,17 +1678,14 @@ def expenses():
 
 @app.route('/api/expenses/<int:expense_id>', methods=['DELETE'])
 def delete_expense(expense_id):
-    """Delete an expense"""
     global expenses_db
 
     try:
         expenses_db = [e for e in expenses_db if e['id'] != expense_id]
-
         return jsonify({
             'success': True,
             'message': 'Expense deleted successfully'
         })
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1861,8 +1877,47 @@ Current expense data:
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
 
+@app.route('/api/budget', methods=['GET'])
+def monthly_budget():
+    try:
+        current_month = datetime.now().strftime('%Y-%m')
 
+        monthly_expenses = []
+        for expense in expenses_db:
+            try:
+                expense_date_str = expense.get('date', '')
+                if isinstance(expense_date_str, list):
+                    expense_date_str = expense_date_str[0] if expense_date_str else ''
+                expense_date = datetime.strptime(expense_date_str, '%Y-%m-%d')
+                if expense_date.strftime('%Y-%m') == current_month:
+                    monthly_expenses.append(expense)
+            except (ValueError, TypeError):
+                continue
+
+        total_spent = 0.0
+        for expense in monthly_expenses:
+            amount = float(expense.get('amount', 0))
+            if expense.get('currency') == 'USD':
+                amount *= 80
+            total_spent += amount
+
+        remaining = max(MONTHLY_BUDGET - total_spent, 0)
+        utilization = (total_spent / MONTHLY_BUDGET * 100) if MONTHLY_BUDGET > 0 else 0
+
+        return jsonify({
+            'success': True,
+            'month': current_month,
+            'budget': round(MONTHLY_BUDGET, 2),
+            'spent': round(total_spent, 2),
+            'remaining': round(remaining, 2),
+            'transactions': len(monthly_expenses),
+            'utilizationPercent': round(utilization, 1)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
 if __name__ == '__main__':
     print("🚀 Starting SmartSpend ML Backend...")
     print("📊 Backend URL: http://localhost:5000")
