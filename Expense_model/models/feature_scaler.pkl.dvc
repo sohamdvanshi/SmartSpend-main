@@ -1,5 +1,5 @@
 outs:
-- md5: bbfb21113901297210780bafbf97664f
-  size: 1383
+- md5: 99f7c8ae953f99a4516e287b45547884
+  size: 1687
   hash: md5
   path: feature_scaler.pkl
